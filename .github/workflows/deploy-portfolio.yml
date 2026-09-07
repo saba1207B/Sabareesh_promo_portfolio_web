@@ -1,0 +1,62 @@
+name: Deploy Portfolio to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Prepare website
+        run: |
+          set -e
+          rm -rf _site
+          mkdir -p _site
+
+          ZIP_FILE="deploy-6a9d05f1843f2ce7ebdf8f0f.zip"
+          test -f "$ZIP_FILE"
+
+          unzip -q "$ZIP_FILE" -d _site
+
+          # If the ZIP contains a single top-level directory, use its contents.
+          if [ ! -f "_site/index.html" ]; then
+            TOP_DIR=$(find _site -mindepth 1 -maxdepth 1 -type d | head -n 1)
+            if [ -n "$TOP_DIR" ] && [ -f "$TOP_DIR/index.html" ]; then
+              cp -a "$TOP_DIR"/. _site/
+            fi
+          fi
+
+          test -f "_site/index.html"
+          echo "Website files prepared:"
+          find _site -maxdepth 2 -type f | sort | head -100
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
